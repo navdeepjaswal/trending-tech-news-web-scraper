@@ -1,39 +1,38 @@
 from operator import itemgetter
-
 import requests
 from pprint import pprint
 from bs4 import BeautifulSoup
 
-# Useful functions
 def sort_stories_by_votes_desc(stories):
     return sorted(stories, key=itemgetter('score'), reverse=True)
 
-def top_posts(pages=1):
-    try:
-        # Fetch response and formulate a Soup Object (to extract from it)
-        for page in range(1, pages + 1):
-            res = requests.get(f'https://news.ycombinator.com/news?p={page}')
-            soup = BeautifulSoup(res.text, 'html.parser')
+def top_posts(pages=1, min_score=100):
+    submission_list = []
 
-            # Fetch links from Soup Object
-            links = soup.select('.submission')
-            submission_list = []
+    for page in range(1, pages + 1):
+        res = requests.get(f'https://news.ycombinator.com/news?p={page}')
+        res.raise_for_status()
+        soup = BeautifulSoup(res.text, 'html.parser')
 
-            for item in links:
-                id_num = item.attrs.get('id')
-                score_tag = soup.select_one(f'#score_{id_num}')
-                title_tag = soup.select_one(f'[id="{id_num}"] .title .titleline a')
+        links = soup.select('.submission')
 
-                if score_tag and title_tag:
-                    href = title_tag.attrs.get('href')
-                    score = score_tag.text.replace(' points', '')
-                    title = title_tag.text
+        for item in links:
+            id_num = item.attrs.get('id')
+            score_tag = soup.select_one(f'#score_{id_num}')
+            title_tag = soup.select_one(f'[id="{id_num}"] .title .titleline a')
 
-                if int(score) > 99:
-                    submission_list.append({"title" : title, "score": score, "URL": href})
+            if score_tag and title_tag:
+                try:
+                    score = int(score_tag.text.replace(' points', ''))
+                    if score >= min_score:
+                        title = title_tag.text
+                        href = title_tag.attrs.get('href')
+                        submission_list.append({"title": title, "score": score, "URL": href})
+                except ValueError:
+                    # Skip malformed score
+                    continue
 
-        return sort_stories_by_votes_desc(submission_list)
-    except Exception as e:
-        print('error: ', e)
+    return sort_stories_by_votes_desc(submission_list)
 
-pprint(top_posts(3))
+if __name__ == "__main__":
+    pprint(top_posts(pages=3))
